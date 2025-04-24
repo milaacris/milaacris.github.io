@@ -1,3 +1,5 @@
+
+#sep
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -19,7 +21,6 @@
       border-radius: 8px;
       padding: 30px;
       text-align: center;
-      cursor: pointer;
       background-color: #f9f9f9;
       margin-bottom: 20px;
     }
@@ -37,7 +38,6 @@
       border-radius: 5px;
       cursor: pointer;
       font-size: 16px;
-      margin-top: 10px;
     }
     button:hover {
       background-color: #2980b9;
@@ -53,38 +53,40 @@
 <body>
   <h1>Обработка CSV</h1>
   <div class="upload-area" id="upload-area">
-    <p>Перетащи CSV-файл сюда или нажми для выбора</p>
+    <p>Перетащите CSV-файл сюда или нажмите кнопку ниже</p>
     <input type="file" id="file-input" accept=".csv">
-    <button id="select-btn">Выбрать файл</button>
+    <button id="select-btn">Выбрать CSV-файл</button>
   </div>
   <div id="status-message" class="message"></div>
 
   <script>
-    const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('file-input');
     const selectBtn = document.getElementById('select-btn');
     const statusMessage = document.getElementById('status-message');
 
-    uploadArea.addEventListener('click', () => fileInput.click());
     selectBtn.addEventListener('click', () => fileInput.click());
 
-    uploadArea.addEventListener('dragover', e => {
-      e.preventDefault();
-      uploadArea.style.backgroundColor = '#eaf2f8';
-    });
-
-    uploadArea.addEventListener('dragleave', () => {
-      uploadArea.style.backgroundColor = '';
-    });
-
-    uploadArea.addEventListener('drop', e => {
-      e.preventDefault();
-      uploadArea.style.backgroundColor = '';
-      handleFile(e.dataTransfer.files[0]);
-    });
-
     fileInput.addEventListener('change', e => {
-      handleFile(e.target.files[0]);
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    document.getElementById('upload-area').addEventListener('dragover', e => {
+      e.preventDefault();
+      e.currentTarget.style.backgroundColor = '#eaf2f8';
+    });
+
+    document.getElementById('upload-area').addEventListener('dragleave', e => {
+      e.currentTarget.style.backgroundColor = '';
+    });
+
+    document.getElementById('upload-area').addEventListener('drop', e => {
+      e.preventDefault();
+      e.currentTarget.style.backgroundColor = '';
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
     });
 
     function handleFile(file) {
@@ -98,13 +100,13 @@
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        const content = e.target.result;
+        const content = e.target.result.replace(/^\uFEFF/, ''); // удаляем BOM
         try {
           const result = processCSV(content);
           downloadCSV(result, 'processed_' + file.name);
           showSuccess('Файл обработан успешно!');
         } catch (err) {
-          showError('Ошибка обработки: ' + err.message);
+          showError('Ошибка: ' + err.message);
         }
       };
       reader.readAsText(file, 'utf-8');
@@ -112,35 +114,40 @@
 
     function processCSV(content) {
       const rows = content.trim().split('\n').map(line => line.split(';'));
-      const headers = rows[0];
+      const headers = rows[0].map(h => h.trim());
       const data = rows.slice(1);
 
-      const required = ['Year', 'Month', 'Product', 'Value QTY'];
-      for (const col of required) {
-        if (!headers.includes(col)) throw new Error(`Нет колонки "${col}"`);
-      }
+      const get = key => {
+        const i = headers.indexOf(key);
+        if (i === -1) throw new Error(`Колонка "${key}" не найдена`);
+        return row => row[i];
+      };
 
-      const colIndex = key => headers.indexOf(key);
-      const outRows = [['Year', 'Month', 'Day', 'SKU', 'Value QTY']];
+      const getYear = get('Year');
+      const getMonth = get('Month');
+      const getSKU = get('Product');
+      const getQty = get('Value QTY');
+
+      const output = [['Year', 'Month', 'Day', 'SKU', 'Value QTY']];
 
       for (const row of data) {
-        const year = parseInt(row[colIndex('Year')]);
-        const month = parseInt(row[colIndex('Month')]);
-        const sku = row[colIndex('Product')];
-        let qty = parseFloat(row[colIndex('Value QTY')]) || 0;
+        const year = parseInt(getYear(row));
+        const month = parseInt(getMonth(row));
+        const sku = getSKU(row);
+        const totalQty = parseFloat(getQty(row).replace(',', '.')) || 0;
 
         const days = new Date(year, month, 0).getDate();
-        const daily = Math.floor(qty / days);
-        const remainder = qty % days;
+        const dailyQty = Math.floor(totalQty / days);
+        const remainder = totalQty % days;
 
         for (let day = 1; day <= days; day++) {
-          let value = daily;
+          let value = dailyQty;
           if (day === days) value += remainder;
-          outRows.push([year, month, day, sku, Math.round(value)]);
+          output.push([year, month, day, sku, Math.round(value)]);
         }
       }
 
-      return outRows.map(r => r.join(';')).join('\n');
+      return output.map(r => r.join(';')).join('\n');
     }
 
     function downloadCSV(content, filename) {
