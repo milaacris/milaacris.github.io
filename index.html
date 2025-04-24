@@ -1,11 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel Data Processor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <title>CSV Data Processor</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -70,11 +69,11 @@
 </head>
 <body>
     <div class="container">
-        <h1>Excel Data Processor</h1>
+        <h1>CSV Data Processor</h1>
 
         <div class="instructions">
             <h3>Instructions:</h3>
-            <p>Upload an Excel file with the following structure:</p>
+            <p>Upload a CSV file with the following structure:</p>
             <ul>
                 <li><strong>Year</strong> - The year (e.g., 2023, 2024)</li>
                 <li><strong>Month</strong> - The month number (1-12)</li>
@@ -85,8 +84,8 @@
         </div>
 
         <div class="upload-area" id="upload-area">
-            <p>Drag & drop your Excel file here or click to browse</p>
-            <input type="file" id="file-input" accept=".xlsx, .xls">
+            <p>Drag & drop your CSV file here or click to browse</p>
+            <input type="file" id="file-input" accept=".csv">
             <button id="upload-button">Select File</button>
         </div>
 
@@ -134,31 +133,32 @@
                 statusMessage.innerHTML = '';
                 statusMessage.className = '';
 
-                if (!file.name.match(/\.(xlsx|xls)$/i)) {
-                    showError('Please upload an Excel file (.xlsx or .xls)');
+                if (!file.name.match(/\.csv$/i)) {
+                    showError('Please upload a CSV file (.csv)');
                     return;
                 }
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        const data = e.target.result;
+                        const parsedData = parseCSV(data);
 
-                        // Process the workbook
-                        const result = processWorkbook(workbook);
-
-                        if (result.error) {
-                            showError(result.error);
+                        if (parsedData.error) {
+                            showError(parsedData.error);
                         } else {
-                            // Create and download the processed file
-                            const outputWorkbook = XLSX.utils.book_new();
-                            XLSX.utils.book_append_sheet(outputWorkbook, result.data, 'Processed Data');
+                            // Process the data and generate the new CSV content
+                            const result = processData(parsedData.data);
+                            const csvContent = generateCSV(result);
 
-                            const outputFileName = 'processed_' + file.name;
-                            XLSX.writeFile(outputWorkbook, outputFileName);
+                            // Trigger download
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const link = document.createElement('a');
+                            link.href = URL.createObjectURL(blob);
+                            link.download = 'processed_data.csv';
+                            link.click();
 
-                            showSuccess(`File processed successfully! Downloading ${outputFileName}. Refresh the page to process another file.`);
+                            showSuccess('File processed successfully! Downloading processed_data.csv.');
                         }
                     } catch (error) {
                         showError('Error processing file: ' + error.message);
@@ -167,101 +167,68 @@
                 reader.onerror = function() {
                     showError('Error reading file');
                 };
-                reader.readAsArrayBuffer(file);
+                reader.readAsText(file);
             }
 
-            function processWorkbook(workbook) {
-                // Get the first worksheet
-                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                // Check if we have at least some data
-                if (data.length < 2) {
-                    return { error: 'The Excel file is empty or has no data rows' };
+            function parseCSV(data) {
+                const rows = data.split('\n').map(row => row.split(','));
+                if (rows.length < 2) {
+                    return { error: 'The CSV file is empty or has no data rows' };
                 }
 
-                // Extract headers (assuming first row is headers)
-                const headers = data[0].map(h => h ? h.toString().trim() : '');
-
-                // Check required columns
+                // Extract headers (first row)
+                const headers = rows[0].map(header => header.trim());
                 const requiredColumns = ['Year', 'Month', 'Product', 'Value QTY'];
+
                 for (const col of requiredColumns) {
                     if (!headers.includes(col)) {
-                        return { error: `The Excel file must contain a "${col}" column` };
+                        return { error: `The CSV file must contain a "${col}" column` };
                     }
                 }
 
-                // Process data rows
-                const resultData = [];
-
-                for (let i = 1; i < data.length; i++) {
-                    const row = data[i];
-                    if (row.length === 0) continue;
-
-                    const rowData = {};
-                    for (let j = 0; j < headers.length; j++) {
-                        if (j < row.length) {
-                            rowData[headers[j]] = row[j];
-                        }
-                    }
-
-                    // Process this row
-                    const processedRows = processRow(rowData);
-                    resultData.push(...processedRows);
-                }
-
-                // Convert result to worksheet
-                const resultHeaders = ['Year', 'Month', 'Day', 'SKU', 'Value QTY'];
-                const resultWorksheet = XLSX.utils.json_to_sheet(resultData, { header: resultHeaders });
-
-                return { data: resultWorksheet };
+                return { data: rows.slice(1).map(row => {
+                    let rowData = {};
+                    headers.forEach((header, index) => {
+                        rowData[header] = row[index] || '';
+                    });
+                    return rowData;
+                })};
             }
 
-            function processRow(row) {
-                const year = parseInt(row['Year']);
-                const month = parseInt(row['Month']);
-                const sku = row['Product'] ? row['Product'].toString() : '';
-                let qty = parseFloat(row['Value QTY']) || 0;
+            function processData(data) {
+                const result = [];
+                data.forEach(row => {
+                    const year = parseInt(row['Year']);
+                    const month = parseInt(row['Month']);
+                    const sku = row['Product'];
+                    const qty = parseFloat(row['Value QTY']) || 0;
 
-                // Handle NaN values
-                if (isNaN(qty)) qty = 0;
-
-                const daysInMonth = getDaysInMonth(year, month);
-                const resultRows = [];
-
-                if (qty === 0) {
-                    // If quantity is zero, create rows with zeros
-                    for (let day = 1; day <= daysInMonth; day++) {
-                        resultRows.push({
-                            'Year': year,
-                            'Month': month,
-                            'Day': day,
-                            'SKU': sku,
-                            'Value QTY': 0
-                        });
-                    }
-                } else {
-                    // Distribute quantity across days
-                    const dailyQty = Math.floor(qty / daysInMonth);
-                    const remainderQty = qty % daysInMonth;
-
-                    for (let day = 1; day <= daysInMonth; day++) {
-                        let currentQty = dailyQty;
-                        if (day === daysInMonth) {
-                            currentQty += remainderQty;
+                    const daysInMonth = getDaysInMonth(year, month);
+                    if (qty === 0) {
+                        for (let day = 1; day <= daysInMonth; day++) {
+                            result.push([year, month, day, sku, 0]);
                         }
+                    } else {
+                        const dailyQty = Math.floor(qty / daysInMonth);
+                        const remainderQty = qty % daysInMonth;
 
-                        resultRows.push({
-                            'Year': year,
-                            'Month': month,
-                            'Day': day,
-                            'SKU': sku,
-                            'Value QTY': Math.round(currentQty)
-                        });
+                        for (let day = 1; day <= daysInMonth; day++) {
+                            let currentQty = dailyQty;
+                            if (day === daysInMonth) {
+                                currentQty += remainderQty;
+                            }
+                            result.push([year, month, day, sku, Math.round(currentQty)]);
+                        }
                     }
-                }
+                });
 
-                return resultRows;
+                return result;
+            }
+
+            function generateCSV(data) {
+                const header = ['Year', 'Month', 'Day', 'SKU', 'Value QTY'];
+                const rows = data.map(row => row.join(','));
+                return [header.join(','), ...rows].join('\n');
             }
 
             function getDaysInMonth(year, month) {
