@@ -1,206 +1,130 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Обработка CSV-файла</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Распределение Продаж</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f4f6f8;
-      color: #2c3e50;
-      padding: 30px;
-      max-width: 800px;
-      margin: auto;
+      background-color: #f9f9f9;
+      margin: 0;
+      padding: 2rem;
+      color: #333;
     }
     h1 {
       text-align: center;
-      font-size: 28px;
-      margin-bottom: 10px;
+      margin-bottom: 1rem;
     }
-    .instructions {
-      background-color: #ecf0f1;
-      border-left: 4px solid #3498db;
-      padding: 15px 20px;
-      margin-bottom: 20px;
-      border-radius: 5px;
-      font-size: 15px;
-    }
-    .upload-area {
-      border: 2px dashed #3498db;
-      border-radius: 10px;
-      padding: 30px;
-      background-color: white;
+    p.instructions {
       text-align: center;
-      cursor: pointer;
-      transition: background-color 0.2s ease-in-out;
-    }
-    .upload-area:hover {
-      background-color: #f0f8ff;
+      max-width: 600px;
+      margin: 0 auto 1.5rem;
+      background: #e8f0fe;
+      padding: 1rem;
+      border-left: 4px solid #4285f4;
+      border-radius: 6px;
     }
     input[type="file"] {
-      display: none;
+      display: block;
+      margin: 0 auto 1rem;
     }
-    button {
-      margin-top: 15px;
-      background-color: #3498db;
-      color: white;
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-      transition: background-color 0.2s ease-in-out;
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
     }
-    button:hover {
-      background-color: #2980b9;
+    table, th, td {
+      border: 1px solid #ccc;
     }
-    .message {
-      margin-top: 20px;
-      font-size: 16px;
-      font-weight: 500;
-    }
-    .success { color: #27ae60; }
-    .error { color: #e74c3c; }
-    .footer-note {
-      margin-top: 30px;
-      font-size: 14px;
-      color: #7f8c8d;
+    th, td {
+      padding: 0.5rem;
       text-align: center;
+    }
+    th {
+      background-color: #f0f0f0;
     }
   </style>
 </head>
 <body>
-  <h1>Обработка CSV-файла</h1>
+  <h1>Распределение Продаж по Дням</h1>
+  <p class="instructions">
+    Загрузите CSV-файл в кодировке UTF-8 с разделителем <code>;</code>. Файл должен содержать колонки: <code>SKU</code>, <code>Month</code> (в формате YYYY-MM), <code>Value QTY</code>.<br>
+    Для загрузки другого файла обновите страницу или выберите новый файл ниже.
+  </p>
+  <input type="file" id="csvFile" accept=".csv" />
+  <div id="output"></div>
 
-  <div class="instructions">
-    Загрузите файл в формате <strong>CSV (UTF-8)</strong> с разделителем <code>;</code>.
-    Структура загружаемого файла должна содержать следующие столбцы:
-    <ul>
-      <li><strong>Year</strong> — год</li>
-      <li><strong>Month</strong> — номер месяца (1-12)</li>
-      <li><strong>Product</strong> — идентификатор товара</li>
-      <li><strong>Value QTY</strong> — объём (целое или дробное число)</li>
-    </ul>
-  </div>
-
-  <div class="upload-area" id="upload-area">
-    <p>Перетащите CSV-файл сюда или нажмите кнопку ниже</p>
-    <input type="file" id="file-input" accept=".csv">
-    <button id="select-btn">Выбрать CSV-файл</button>
-  </div>
-
-  <div id="status-message" class="message"></div>
-
-  <div class="footer-note">
-    Чтобы загрузить следующий файл — обновите страницу или выберите другой файл
-  </div>
-
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <script>
-    const fileInput = document.getElementById('file-input');
-    const selectBtn = document.getElementById('select-btn');
-    const statusMessage = document.getElementById('status-message');
+    document.getElementById('csvFile').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
 
-    selectBtn.addEventListener('click', () => fileInput.click());
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: ";",
+        complete: function (results) {
+          const data = results.data;
+          if (!data[0]["Value QTY"]) {
+            alert("Отсутствует колонка 'Value QTY'");
+            return;
+          }
 
-    fileInput.addEventListener('change', e => {
-      if (e.target.files.length > 0) {
-        handleFile(e.target.files[0]);
-      }
-    });
+          const output = [];
 
-    const dropArea = document.getElementById('upload-area');
-    dropArea.addEventListener('dragover', e => {
-      e.preventDefault();
-      dropArea.style.backgroundColor = '#f0f8ff';
-    });
-    dropArea.addEventListener('dragleave', () => {
-      dropArea.style.backgroundColor = 'white';
-    });
-    dropArea.addEventListener('drop', e => {
-      e.preventDefault();
-      dropArea.style.backgroundColor = 'white';
-      if (e.dataTransfer.files.length > 0) {
-        handleFile(e.dataTransfer.files[0]);
-      }
-    });
+          for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            const sku = row["SKU"];
+            const month = row["Month"];
+            const qty = parseInt(row["Value QTY"], 10);
+            const [year, mon] = month.split("-");
+            const daysInMonth = new Date(year, mon, 0).getDate();
 
-    function handleFile(file) {
-      statusMessage.textContent = '';
-      statusMessage.className = 'message';
+            for (let d = 1; d <= daysInMonth; d++) {
+              const date = `${month}-${String(d).padStart(2, '0')}`;
+              let value = 0;
 
-      if (!file.name.endsWith('.csv')) {
-        showError('Пожалуйста, загрузите файл в формате CSV.');
-        return;
-      }
+              if (qty < daysInMonth) {
+                value = d <= qty ? 1 : 0;
+              } else if (qty === daysInMonth) {
+                value = 1;
+              } else {
+                const dailyQty = Math.floor(qty / daysInMonth);
+                const remainder = qty % daysInMonth;
+                value = dailyQty + (d <= remainder ? 1 : 0);
+              }
 
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const content = e.target.result.replace(/^\uFEFF/, ''); // удалить BOM
-        try {
-          const result = processCSV(content);
-          downloadCSV(result, 'processed_' + file.name);
-          showSuccess('Файл успешно обработан!');
-        } catch (err) {
-          showError('Ошибка: ' + err.message);
+              output.push({ SKU: sku, Date: date, Value: value });
+            }
+          }
+
+          displayTable(output);
         }
-      };
-      reader.readAsText(file, 'utf-8');
-    }
+      });
+    });
 
-    function processCSV(content) {
-      const rows = content.trim().split('\n').map(line => line.split(';'));
-      const headers = rows[0].map(h => h.trim());
-      const data = rows.slice(1);
+    function displayTable(data) {
+      const table = document.createElement('table');
+      const headerRow = table.insertRow();
+      ["SKU", "Date", "Value"].forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        headerRow.appendChild(th);
+      });
 
-      const get = key => {
-        const i = headers.indexOf(key);
-        if (i === -1) throw new Error(`Колонка "${key}" не найдена`);
-        return row => row[i];
-      };
+      data.forEach(row => {
+        const tr = table.insertRow();
+        [row.SKU, row.Date, row.Value].forEach(cellText => {
+          const td = tr.insertCell();
+          td.textContent = cellText;
+        });
+      });
 
-      const getYear = get('Year');
-      const getMonth = get('Month');
-      const getSKU = get('Product');
-      const getQty = get('Value QTY');
-
-      const output = [['Year', 'Month', 'Day', 'SKU', 'Value QTY']];
-
-      for (const row of data) {
-        const year = parseInt(getYear(row));
-        const month = parseInt(getMonth(row));
-        const sku = getSKU(row);
-        const totalQty = parseFloat(getQty(row).replace(',', '.')) || 0;
-
-        const days = new Date(year, month, 0).getDate();
-        const dailyQty = Math.floor(totalQty / days);
-        const remainder = totalQty % days;
-
-        for (let day = 1; day <= days; day++) {
-          let value = dailyQty;
-          if (day === days) value += remainder;
-          output.push([year, month, day, sku, Math.round(value)]);
-        }
-      }
-
-      return output.map(r => r.join(';')).join('\n');
-    }
-
-    function downloadCSV(content, filename) {
-      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-    }
-
-    function showError(msg) {
-      statusMessage.textContent = msg;
-      statusMessage.className = 'message error';
-    }
-
-    function showSuccess(msg) {
-      statusMessage.textContent = msg;
-      statusMessage.className = 'message success';
+      const outputDiv = document.getElementById('output');
+      outputDiv.innerHTML = "";
+      outputDiv.appendChild(table);
     }
   </script>
 </body>
