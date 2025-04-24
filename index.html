@@ -172,13 +172,26 @@
         const totalQty = parseFloat(getQty(row).replace(',', '.')) || 0;
 
         const days = new Date(year, month, 0).getDate();
-        const dailyQty = Math.floor(totalQty / days);
-        const remainder = totalQty % days;
 
-        for (let day = 1; day <= days; day++) {
-          let value = dailyQty;
-          if (day === days) value += remainder;
-          output.push([year, month, day, sku, Math.round(value)]);
+        if (totalQty <= days) {
+          // Новая логика: если количество <= дней в месяце, распределяем по 1 в день
+          for (let day = 1; day <= totalQty; day++) {
+            output.push([year, month, day, sku, 1]);
+          }
+          // Остальные дни месяца заполняем нулями (если нужно)
+          for (let day = Math.ceil(totalQty) + 1; day <= days; day++) {
+            output.push([year, month, day, sku, 0]);
+          }
+        } else {
+          // Старая логика: равномерное распределение с остатком в последний день
+          const dailyQty = Math.floor(totalQty / days);
+          const remainder = totalQty % days;
+
+          for (let day = 1; day <= days; day++) {
+            let value = dailyQty;
+            if (day === days) value += remainder;
+            output.push([year, month, day, sku, Math.round(value)]);
+          }
         }
       }
 
