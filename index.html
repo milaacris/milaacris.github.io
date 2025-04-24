@@ -1,3 +1,5 @@
+
+#last
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -152,10 +154,14 @@
       const headers = rows[0].map(h => h.trim());
       const data = rows.slice(1);
 
+      // Определяем обязательные колонки
+      const requiredColumns = ['Year', 'Month', 'Product', 'Value QTY'];
       const get = key => {
         const i = headers.indexOf(key);
-        if (i === -1) throw new Error(`Колонка "${key}" не найдена`);
-        return row => row[i];
+        if (i === -1 && requiredColumns.includes(key)) {
+          throw new Error(Обязательная колонка "${key}" не найдена);
+        }
+        return i !== -1 ? (row => row[i].trim()) : (() => '');
       };
 
       const getYear = get('Year');
@@ -163,7 +169,16 @@
       const getSKU = get('Product');
       const getQty = get('Value QTY');
 
-      const output = [['Year', 'Month', 'Day', 'SKU', 'Value QTY']];
+      // Собираем все дополнительные колонки (кроме обязательных)
+      const additionalColumns = headers.filter(h => !requiredColumns.includes(h));
+      const getAdditional = {};
+      additionalColumns.forEach(col => {
+        getAdditional[col] = get(col);
+      });
+
+      // Формируем заголовки выходного файла
+      const outputHeaders = ['Year', 'Month', 'Day', 'SKU', 'Value QTY', ...additionalColumns];
+      const output = [outputHeaders];
 
       for (const row of data) {
         const year = parseInt(getYear(row));
@@ -171,16 +186,36 @@
         const sku = getSKU(row);
         const totalQty = parseFloat(getQty(row).replace(',', '.')) || 0;
 
+        // Получаем значения дополнительных колонок для текущей строки
+        const additionalValues = {};
+        additionalColumns.forEach(col => {
+          additionalValues[col] = getAdditional[col](row);
+        });
+
         const days = new Date(year, month, 0).getDate();
 
         if (totalQty <= days) {
           // Новая логика: если количество <= дней в месяце, распределяем по 1 в день
           for (let day = 1; day <= totalQty; day++) {
-            output.push([year, month, day, sku, 1]);
+            output.push([
+              year, 
+              month, 
+              day, 
+              sku, 
+              1,
+              ...additionalColumns.map(col => additionalValues[col])
+            ]);
           }
           // Остальные дни месяца заполняем нулями (если нужно)
           for (let day = Math.ceil(totalQty) + 1; day <= days; day++) {
-            output.push([year, month, day, sku, 0]);
+            output.push([
+              year, 
+              month, 
+              day, 
+              sku, 
+              0,
+              ...additionalColumns.map(col => additionalValues[col])
+            ]);
           }
         } else {
           // Старая логика: равномерное распределение с остатком в последний день
@@ -190,7 +225,14 @@
           for (let day = 1; day <= days; day++) {
             let value = dailyQty;
             if (day === days) value += remainder;
-            output.push([year, month, day, sku, Math.round(value)]);
+            output.push([
+              year, 
+              month, 
+              day, 
+              sku, 
+              Math.round(value),
+              ...additionalColumns.map(col => additionalValues[col])
+            ]);
           }
         }
       }
