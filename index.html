@@ -1,131 +1,300 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CSV Распределение Продаж</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f9f9f9;
-      margin: 0;
-      padding: 2rem;
-      color: #333;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 1rem;
-    }
-    p.instructions {
-      text-align: center;
-      max-width: 600px;
-      margin: 0 auto 1.5rem;
-      background: #e8f0fe;
-      padding: 1rem;
-      border-left: 4px solid #4285f4;
-      border-radius: 6px;
-    }
-    input[type="file"] {
-      display: block;
-      margin: 0 auto 1rem;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1.5rem;
-    }
-    table, th, td {
-      border: 1px solid #ccc;
-    }
-    th, td {
-      padding: 0.5rem;
-      text-align: center;
-    }
-    th {
-      background-color: #f0f0f0;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Data Processor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .upload-area:hover {
+            background-color: #eaf2f8;
+        }
+        #file-input {
+            display: none;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .instructions {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+        .success {
+            color: #27ae60;
+            margin-top: 10px;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+            const uploadButton = document.getElementById('upload-button');
+            const statusMessage = document.getElementById('status-message');
+
+            // Handle click on upload area
+            uploadArea.addEventListener('click', function() {
+                fileInput.click();
+            });
+
+            // Handle file selection
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    processFile(e.target.files[0]);
+                }
+            });
+
+            // Handle drag and drop
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#eaf2f8';
+            });
+
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.style.backgroundColor = '';
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '';
+                if (e.dataTransfer.files.length > 0) {
+                    processFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            function processFile(file) {
+                statusMessage.innerHTML = '';
+                statusMessage.className = '';
+
+                if (!file.name.match(/\.(csv)$/i)) {
+                    showError('Please upload a CSV file (.csv)');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = e.target.result;
+                        const rows = data.split('\n').map(row => row.split(';'));
+
+                        // Process the CSV data
+                        const result = processCsvData(rows);
+
+                        if (result.error) {
+                            showError(result.error);
+                        } else {
+                            // Create CSV output
+                            const output = convertToCsv(result.data);
+                            const blob = new Blob([output], { type: 'text/csv;charset=utf-8' });
+                            const outputFileName = 'processed_' + file.name;
+
+                            // Download the processed file
+                            saveAs(blob, outputFileName);
+
+                            showSuccess(`File processed successfully! Downloading ${outputFileName}. Refresh the page to process another file.`);
+                        }
+                    } catch (error) {
+                        showError('Error processing file: ' + error.message);
+                    }
+                };
+                reader.onerror = function() {
+                    showError('Error reading file');
+                };
+                reader.readAsText(file);
+            }
+
+            function processCsvData(data) {
+                const headers = data[0];
+                const requiredColumns = ['Year', 'Month', 'Product', 'Value QTY'];
+
+                // Validate headers
+                for (const col of requiredColumns) {
+                    if (!headers.includes(col)) {
+                        return { error: `The CSV file must contain a "${col}" column` };
+                    }
+                }
+
+                const resultData = [];
+                const yearIndex = headers.indexOf('Year');
+                const monthIndex = headers.indexOf('Month');
+                const productIndex = headers.indexOf('Product');
+                const qtyIndex = headers.indexOf('Value QTY');
+
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    if (row.length === 0) continue;
+
+                    const rowData = {
+                        Year: row[yearIndex],
+                        Month: row[monthIndex],
+                        Product: row[productIndex],
+                        'Value QTY': parseFloat(row[qtyIndex])
+                    };
+
+                    // Process this row
+                    const processedRows = processRow(rowData);
+                    resultData.push(...processedRows);
+                }
+
+                return { data: resultData };
+            }
+
+            function processRow(row) {
+                const year = parseInt(row.Year);
+                const month = parseInt(row.Month);
+                const sku = row.Product;
+                let qty = row['Value QTY'];
+
+                // Handle NaN values
+                if (isNaN(qty)) qty = 0;
+
+                const daysInMonth = getDaysInMonth(year, month);
+                const resultRows = [];
+
+                if (qty < daysInMonth) {
+                    // Distribute 1 SKU per day until qty is exhausted
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        if (qty > 0) {
+                            resultRows.push({
+                                Year: year,
+                                Month: month,
+                                Day: day,
+                                SKU: sku,
+                                'Value QTY': 1
+                            });
+                            qty--;
+                        } else {
+                            resultRows.push({
+                                Year: year,
+                                Month: month,
+                                Day: day,
+                                SKU: sku,
+                                'Value QTY': 0
+                            });
+                        }
+                    }
+                } else {
+                    // Distribute qty evenly
+                    const dailyQty = Math.floor(qty / daysInMonth);
+                    const remainderQty = qty % daysInMonth;
+
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        let currentQty = dailyQty;
+                        if (day === daysInMonth) {
+                            currentQty += remainderQty;
+                        }
+
+                        resultRows.push({
+                            Year: year,
+                            Month: month,
+                            Day: day,
+                            SKU: sku,
+                            'Value QTY': currentQty
+                        });
+                    }
+                }
+
+                return resultRows;
+            }
+
+            function getDaysInMonth(year, month) {
+                if (month === 2) {
+                    return isLeapYear(year) ? 29 : 28;
+                } else if ([4, 6, 9, 11].includes(month)) {
+                    return 30;
+                } else {
+                    return 31;
+                }
+            }
+
+            function isLeapYear(year) {
+                return (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0));
+            }
+
+            function convertToCsv(data) {
+                const headers = ['Year', 'Month', 'Day', 'SKU', 'Value QTY'];
+                const rows = [headers.join(';')];
+                for (const row of data) {
+                    rows.push([row.Year, row.Month, row.Day, row.SKU, row['Value QTY']].join(';'));
+                }
+                return rows.join('\n');
+            }
+
+            function showError(message) {
+                statusMessage.innerHTML = message;
+                statusMessage.className = 'error';
+            }
+
+            function showSuccess(message) {
+                statusMessage.innerHTML = message;
+                statusMessage.className = 'success';
+            }
+        });
+    </script>
 </head>
 <body>
-  <h1>Распределение Продаж по Дням</h1>
-  <p class="instructions">
-    Загрузите CSV-файл в кодировке UTF-8 с разделителем <code>;</code>. Файл должен содержать колонки: <code>SKU</code>, <code>Month</code> (в формате YYYY-MM), <code>Value QTY</code>.<br>
-    Для загрузки другого файла обновите страницу или выберите новый файл ниже.
-  </p>
-  <input type="file" id="csvFile" accept=".csv" />
-  <div id="output"></div>
+    <div class="container">
+        <h1>CSV Data Processor</h1>
 
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-  <script>
-    document.getElementById('csvFile').addEventListener('change', function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
+        <div class="instructions">
+            <h3>Instructions:</h3>
+            <p>Upload a CSV file (UTF-8 encoded with ";" delimiter) containing the following columns:</p>
+            <ul>
+                <li><strong>Year</strong> - The year (e.g., 2023, 2024)</li>
+                <li><strong>Month</strong> - The month number (1-12)</li>
+                <li><strong>Product</strong> - Product SKU (e.g., SKU1, SKU2)</li>
+                <li><strong>Value QTY</strong> - Total quantity for the month</li>
+            </ul>
+            <p>The processor will distribute quantities evenly across all days of each month.</p>
+        </div>
 
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        delimiter: ";",
-        complete: function (results) {
-          const data = results.data;
-          if (!data[0]["Value QTY"]) {
-            alert("Отсутствует колонка 'Value QTY'");
-            return;
-          }
+        <div class="upload-area" id="upload-area">
+            <p>Drag & drop your CSV file here or click to browse</p>
+            <input type="file" id="file-input" accept=".csv">
+            <button id="upload-button">Select File</button>
+        </div>
 
-          const output = [];
-
-          for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const sku = row["SKU"];
-            const month = row["Month"];
-            const qty = parseInt(row["Value QTY"], 10);
-            const [year, mon] = month.split("-");
-            const daysInMonth = new Date(year, mon, 0).getDate();
-
-            for (let d = 1; d <= daysInMonth; d++) {
-              const date = `${month}-${String(d).padStart(2, '0')}`;
-              let value = 0;
-
-              if (qty < daysInMonth) {
-                value = d <= qty ? 1 : 0;
-              } else if (qty === daysInMonth) {
-                value = 1;
-              } else {
-                const dailyQty = Math.floor(qty / daysInMonth);
-                const remainder = qty % daysInMonth;
-                value = dailyQty + (d <= remainder ? 1 : 0);
-              }
-
-              output.push({ SKU: sku, Date: date, Value: value });
-            }
-          }
-
-          displayTable(output);
-        }
-      });
-    });
-
-    function displayTable(data) {
-      const table = document.createElement('table');
-      const headerRow = table.insertRow();
-      ["SKU", "Date", "Value"].forEach(text => {
-        const th = document.createElement('th');
-        th.textContent = text;
-        headerRow.appendChild(th);
-      });
-
-      data.forEach(row => {
-        const tr = table.insertRow();
-        [row.SKU, row.Date, row.Value].forEach(cellText => {
-          const td = tr.insertCell();
-          td.textContent = cellText;
-        });
-      });
-
-      const outputDiv = document.getElementById('output');
-      outputDiv.innerHTML = "";
-      outputDiv.appendChild(table);
-    }
-  </script>
+        <div id="status-message"></div>
+    </div>
 </body>
 </html>
