@@ -148,10 +148,9 @@
                 const requiredColumns = ['Year', 'Month', 'Product', 'Value QTY'];
 
                 // Validate headers
-                for (const col of requiredColumns) {
-                    if (!headers.includes(col)) {
-                        return { error: `The CSV file must contain a "${col}" column` };
-                    }
+                const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+                if (missingColumns.length > 0) {
+                    return { error: `The CSV file is missing the following required columns: ${missingColumns.join(', ')}` };
                 }
 
                 const resultData = [];
