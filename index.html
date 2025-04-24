@@ -2,60 +2,98 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Обработка CSV</title>
+  <title>Обработка CSV-файла</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f8;
+      color: #2c3e50;
+      padding: 30px;
       max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
+      margin: auto;
     }
     h1 {
       text-align: center;
-      color: #2c3e50;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    .instructions {
+      background-color: #ecf0f1;
+      border-left: 4px solid #3498db;
+      padding: 15px 20px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      font-size: 15px;
     }
     .upload-area {
       border: 2px dashed #3498db;
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 30px;
+      background-color: white;
       text-align: center;
-      background-color: #f9f9f9;
-      margin-bottom: 20px;
+      cursor: pointer;
+      transition: background-color 0.2s ease-in-out;
     }
     .upload-area:hover {
-      background-color: #eaf2f8;
+      background-color: #f0f8ff;
     }
-    #file-input {
+    input[type="file"] {
       display: none;
     }
     button {
+      margin-top: 15px;
       background-color: #3498db;
       color: white;
-      padding: 10px 15px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 5px;
-      cursor: pointer;
+      border-radius: 8px;
       font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.2s ease-in-out;
     }
     button:hover {
       background-color: #2980b9;
     }
     .message {
-      margin-top: 15px;
-      font-weight: bold;
+      margin-top: 20px;
+      font-size: 16px;
+      font-weight: 500;
     }
-    .error { color: #e74c3c; }
     .success { color: #27ae60; }
+    .error { color: #e74c3c; }
+    .footer-note {
+      margin-top: 30px;
+      font-size: 14px;
+      color: #7f8c8d;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <h1>Обработка CSV</h1>
+  <h1>Обработка CSV-файла</h1>
+
+  <div class="instructions">
+    Загрузите файл в формате <strong>CSV (UTF-8)</strong> с разделителем <code>;</code>.
+    Структура загружаемого файла должна содержать следующие столбцы:
+    <ul>
+      <li><strong>Year</strong> — год</li>
+      <li><strong>Month</strong> — номер месяца (1-12)</li>
+      <li><strong>Product</strong> — идентификатор товара</li>
+      <li><strong>Value QTY</strong> — объём (целое или дробное число)</li>
+    </ul>
+  </div>
+
   <div class="upload-area" id="upload-area">
     <p>Перетащите CSV-файл сюда или нажмите кнопку ниже</p>
     <input type="file" id="file-input" accept=".csv">
     <button id="select-btn">Выбрать CSV-файл</button>
   </div>
+
   <div id="status-message" class="message"></div>
+
+  <div class="footer-note">
+    Чтобы загрузить следующий файл — обновите страницу или выберите другой файл
+  </div>
 
   <script>
     const fileInput = document.getElementById('file-input');
@@ -70,18 +108,17 @@
       }
     });
 
-    document.getElementById('upload-area').addEventListener('dragover', e => {
+    const dropArea = document.getElementById('upload-area');
+    dropArea.addEventListener('dragover', e => {
       e.preventDefault();
-      e.currentTarget.style.backgroundColor = '#eaf2f8';
+      dropArea.style.backgroundColor = '#f0f8ff';
     });
-
-    document.getElementById('upload-area').addEventListener('dragleave', e => {
-      e.currentTarget.style.backgroundColor = '';
+    dropArea.addEventListener('dragleave', () => {
+      dropArea.style.backgroundColor = 'white';
     });
-
-    document.getElementById('upload-area').addEventListener('drop', e => {
+    dropArea.addEventListener('drop', e => {
       e.preventDefault();
-      e.currentTarget.style.backgroundColor = '';
+      dropArea.style.backgroundColor = 'white';
       if (e.dataTransfer.files.length > 0) {
         handleFile(e.dataTransfer.files[0]);
       }
@@ -92,17 +129,17 @@
       statusMessage.className = 'message';
 
       if (!file.name.endsWith('.csv')) {
-        showError('Загрузите файл в формате CSV.');
+        showError('Пожалуйста, загрузите файл в формате CSV.');
         return;
       }
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        const content = e.target.result.replace(/^\uFEFF/, ''); // удаляем BOM
+        const content = e.target.result.replace(/^\uFEFF/, ''); // удалить BOM
         try {
           const result = processCSV(content);
           downloadCSV(result, 'processed_' + file.name);
-          showSuccess('Файл обработан успешно!');
+          showSuccess('Файл успешно обработан!');
         } catch (err) {
           showError('Ошибка: ' + err.message);
         }
