@@ -3,41 +3,293 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>Excel Data Processor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f9;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
         }
-        header {
-            background-color: #333;
-            color: #fff;
-            padding: 10px 0;
+        h1 {
+            color: #2c3e50;
             text-align: center;
         }
         .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
             padding: 20px;
-            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        iframe {
+        .upload-area {
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .upload-area:hover {
+            background-color: #eaf2f8;
+        }
+        #file-input {
+            display: none;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
             border: none;
-            width: 100%;
-            max-width: 1140px;
-            height: 1140px;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .instructions {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+        .success {
+            color: #27ae60;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <h1>Excel Data Processor</h1>
 
-<header>
-    <h1>Dashboard</h1>
-</header>
+        <div class="instructions">
+            <h3>Instructions:</h3>
+            <p>Upload an Excel file with the following structure:</p>
+            <ul>
+                <li><strong>Year</strong> - The year (e.g., 2023, 2024)</li>
+                <li><strong>Month</strong> - The month number (1-12)</li>
+                <li><strong>Product</strong> - Product SKU (e.g., SKU1, SKU2)</li>
+                <li><strong>Value QTY</strong> - Total quantity for the month</li>
+            </ul>
+            <p>The processor will distribute quantities evenly across all days of each month.</p>
+        </div>
 
-<div class="container">
-    <iframe title="Дэш Шелушенко" src="https://app.powerbi.com/reportEmbed?reportId=ed219408-4f58-4178-87b0-1c3ad27e03b5&autoAuth=true&ctid=21f26c24-0793-4b07-a73d-563cd2ec235f" allowfullscreen></iframe>
-</div>
+        <div class="upload-area" id="upload-area">
+            <p>Drag & drop your Excel file here or click to browse</p>
+            <input type="file" id="file-input" accept=".xlsx, .xls">
+            <button id="upload-button">Select File</button>
+        </div>
 
+        <div id="status-message"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+            const uploadButton = document.getElementById('upload-button');
+            const statusMessage = document.getElementById('status-message');
+
+            // Handle click on upload area
+            uploadArea.addEventListener('click', function() {
+                fileInput.click();
+            });
+
+            // Handle file selection
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    processFile(e.target.files[0]);
+                }
+            });
+
+            // Handle drag and drop
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#eaf2f8';
+            });
+
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.style.backgroundColor = '';
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '';
+                if (e.dataTransfer.files.length > 0) {
+                    processFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            function processFile(file) {
+                statusMessage.innerHTML = '';
+                statusMessage.className = '';
+
+                if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                    showError('Please upload an Excel file (.xlsx or .xls)');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+
+                        // Process the workbook
+                        const result = processWorkbook(workbook);
+
+                        if (result.error) {
+                            showError(result.error);
+                        } else {
+                            // Create and download the processed file
+                            const outputWorkbook = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(outputWorkbook, result.data, 'Processed Data');
+
+                            const outputFileName = 'processed_' + file.name;
+                            XLSX.writeFile(outputWorkbook, outputFileName);
+
+                            showSuccess(`File processed successfully! Downloading ${outputFileName}. Refresh the page to process another file.`);
+                        }
+                    } catch (error) {
+                        showError('Error processing file: ' + error.message);
+                    }
+                };
+                reader.onerror = function() {
+                    showError('Error reading file');
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            function processWorkbook(workbook) {
+                // Get the first worksheet
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                // Check if we have at least some data
+                if (data.length < 2) {
+                    return { error: 'The Excel file is empty or has no data rows' };
+                }
+
+                // Extract headers (assuming first row is headers)
+                const headers = data[0].map(h => h ? h.toString().trim() : '');
+
+                // Check required columns
+                const requiredColumns = ['Year', 'Month', 'Product', 'Value QTY'];
+                for (const col of requiredColumns) {
+                    if (!headers.includes(col)) {
+                        return { error: `The Excel file must contain a "${col}" column` };
+                    }
+                }
+
+                // Process data rows
+                const resultData = [];
+
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    if (row.length === 0) continue;
+
+                    const rowData = {};
+                    for (let j = 0; j < headers.length; j++) {
+                        if (j < row.length) {
+                            rowData[headers[j]] = row[j];
+                        }
+                    }
+
+                    // Process this row
+                    const processedRows = processRow(rowData);
+                    resultData.push(...processedRows);
+                }
+
+                // Convert result to worksheet
+                const resultHeaders = ['Year', 'Month', 'Day', 'SKU', 'Value QTY'];
+                const resultWorksheet = XLSX.utils.json_to_sheet(resultData, { header: resultHeaders });
+
+                return { data: resultWorksheet };
+            }
+
+            function processRow(row) {
+                const year = parseInt(row['Year']);
+                const month = parseInt(row['Month']);
+                const sku = row['Product'] ? row['Product'].toString() : '';
+                let qty = parseFloat(row['Value QTY']) || 0;
+
+                // Handle NaN values
+                if (isNaN(qty)) qty = 0;
+
+                const daysInMonth = getDaysInMonth(year, month);
+                const resultRows = [];
+
+                if (qty === 0) {
+                    // If quantity is zero, create rows with zeros
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        resultRows.push({
+                            'Year': year,
+                            'Month': month,
+                            'Day': day,
+                            'SKU': sku,
+                            'Value QTY': 0
+                        });
+                    }
+                } else {
+                    // Distribute quantity across days
+                    const dailyQty = Math.floor(qty / daysInMonth);
+                    const remainderQty = qty % daysInMonth;
+
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        let currentQty = dailyQty;
+                        if (day === daysInMonth) {
+                            currentQty += remainderQty;
+                        }
+
+                        resultRows.push({
+                            'Year': year,
+                            'Month': month,
+                            'Day': day,
+                            'SKU': sku,
+                            'Value QTY': Math.round(currentQty)
+                        });
+                    }
+                }
+
+                return resultRows;
+            }
+
+            function getDaysInMonth(year, month) {
+                if (month === 2) {
+                    return isLeapYear(year) ? 29 : 28;
+                } else if ([4, 6, 9, 11].includes(month)) {
+                    return 30;
+                } else {
+                    return 31;
+                }
+            }
+
+            function isLeapYear(year) {
+                if (year % 4 !== 0) return false;
+                if (year % 100 !== 0) return true;
+                return year % 400 === 0;
+            }
+
+            function showError(message) {
+                statusMessage.innerHTML = message;
+                statusMessage.className = 'error';
+            }
+
+            function showSuccess(message) {
+                statusMessage.innerHTML = message;
+                statusMessage.className = 'success';
+            }
+        });
+    </script>
 </body>
 </html>
