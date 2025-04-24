@@ -157,7 +157,7 @@
       const get = key => {
         const i = headers.indexOf(key);
         if (i === -1 && requiredColumns.includes(key)) {
-          throw new Error(Обязательная колонка "${key}" не найдена);
+          throw new Error(`Обязательная колонка "${key}" не найдена`);
         }
         return i !== -1 ? (row => row[i].trim()) : (() => '');
       };
@@ -196,10 +196,10 @@
           // Новая логика: если количество <= дней в месяце, распределяем по 1 в день
           for (let day = 1; day <= totalQty; day++) {
             output.push([
-              year, 
-              month, 
-              day, 
-              sku, 
+              year,
+              month,
+              day,
+              sku,
               1,
               ...additionalColumns.map(col => additionalValues[col])
             ]);
@@ -207,10 +207,10 @@
           // Остальные дни месяца заполняем нулями (если нужно)
           for (let day = Math.ceil(totalQty) + 1; day <= days; day++) {
             output.push([
-              year, 
-              month, 
-              day, 
-              sku, 
+              year,
+              month,
+              day,
+              sku,
               0,
               ...additionalColumns.map(col => additionalValues[col])
             ]);
@@ -224,10 +224,10 @@
             let value = dailyQty;
             if (day === days) value += remainder;
             output.push([
-              year, 
-              month, 
-              day, 
-              sku, 
+              year,
+              month,
+              day,
+              sku,
               Math.round(value),
               ...additionalColumns.map(col => additionalValues[col])
             ]);
