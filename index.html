@@ -183,6 +183,8 @@
         const month = parseInt(getMonth(row));
         const sku = getSKU(row);
         const totalQty = parseFloat(getQty(row).replace(',', '.')) || 0;
+        const isNegative = totalQty < 0;
+        const absQty = Math.abs(totalQty);
 
         // Получаем значения дополнительных колонок для текущей строки
         const additionalValues = {};
@@ -192,20 +194,20 @@
 
         const days = new Date(year, month, 0).getDate();
 
-        if (totalQty <= days) {
+        if (absQty <= days) {
           // Новая логика: если количество <= дней в месяце, распределяем по 1 в день
-          for (let day = 1; day <= totalQty; day++) {
+          for (let day = 1; day <= absQty; day++) {
             output.push([
               year,
               month,
               day,
               sku,
-              1,
+              isNegative ? -1 : 1,
               ...additionalColumns.map(col => additionalValues[col])
             ]);
           }
           // Остальные дни месяца заполняем нулями (если нужно)
-          for (let day = Math.ceil(totalQty) + 1; day <= days; day++) {
+          for (let day = Math.ceil(absQty) + 1; day <= days; day++) {
             output.push([
               year,
               month,
@@ -217,8 +219,8 @@
           }
         } else {
           // Старая логика: равномерное распределение с остатком в последний день
-          const dailyQty = Math.floor(totalQty / days);
-          const remainder = totalQty % days;
+          const dailyQty = Math.floor(absQty / days);
+          const remainder = absQty % days;
 
           for (let day = 1; day <= days; day++) {
             let value = dailyQty;
@@ -228,7 +230,7 @@
               month,
               day,
               sku,
-              Math.round(value),
+              isNegative ? -Math.round(value) : Math.round(value),
               ...additionalColumns.map(col => additionalValues[col])
             ]);
           }
